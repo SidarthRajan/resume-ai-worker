@@ -1,6 +1,7 @@
 # src/cli.py
 import click, json, os
 from .parser import parse_resume
+from .tailor import rewrite_sections_single_call
 
 @click.group()
 def cli(): pass
@@ -13,6 +14,17 @@ def parse(resume, out):
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         json.dump(data, f, indent=2)
+    click.echo(f"Wrote {out}")
+
+@cli.command()
+@click.option('--parsed', required=True)
+@click.option('--jd', required=True)
+@click.option('--out', required=True)
+def tailor(parsed, jd, out):
+    data = rewrite_sections_single_call(parsed, jd)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
     click.echo(f"Wrote {out}")
 
 if __name__ == "__main__":

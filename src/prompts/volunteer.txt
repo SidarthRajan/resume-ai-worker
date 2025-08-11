@@ -1,0 +1,5 @@
+Rewrite VOLUNTEER bullets to emphasize leadership/impact relevant to JD.
+[VOLUNTEER_JSON]
+---
+[JOB_DESCRIPTION]
+Return JSON array with same length and keys; modify `bullets` only.

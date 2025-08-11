@@ -1,0 +1,6 @@
+Rewrite PROJECTS to emphasize relevance to JOB DESCRIPTION.
+Rules: keep names/dates truthful; tighten bullets; highlight used tech already listed.
+[PROJECTS_JSON]
+---
+[JOB_DESCRIPTION]
+Return JSON array with same length and keys; modify `bullets` only.

@@ -1,0 +1,6 @@
+Rewrite EXPERIENCE bullets to align with the JOB DESCRIPTION.
+Rules: keep roles/titles/companies/dates intact; rephrase bullets only; quantify where already implied; no new projects/tech; keep order.
+[EXPERIENCE_JSON]
+---
+[JOB_DESCRIPTION]
+Return JSON with same array length and fields; only modify `bullets` and reorder bullets if warranted.

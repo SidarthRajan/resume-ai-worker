@@ -1,0 +1,6 @@
+Rewrite SKILLS to prioritize JD-relevant items; remove duplicates/outdated.
+Rules: keep skills only if present in original; you may reorder; no new skills.
+[SKILLS_LIST]
+---
+[JOB_DESCRIPTION]
+Return a JSON array of strings.

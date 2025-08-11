@@ -1,0 +1,6 @@
+Rewrite EDUCATION to emphasize coursework/honors relevant to the JOB DESCRIPTION.
+Rules: keep schools/dates true; do not add degrees; concise.
+[EDUCATION_JSON]
+---
+[JOB_DESCRIPTION]
+Return JSON array with same length, same keys; modify text fields only.

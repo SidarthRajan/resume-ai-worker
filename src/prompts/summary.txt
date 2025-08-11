@@ -1,0 +1,6 @@
+You are a professional resume editor. Rewrite the SUMMARY to align with the JOB DESCRIPTION.
+Rules: be truthful, 2–4 sentences, ATS-friendly, prioritize relevant skills/impact, no new facts.
+[SUMMARY]
+---
+[JOB_DESCRIPTION]
+Return ONLY the revised summary text.

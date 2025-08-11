@@ -1,0 +1,5 @@
+Rewrite CERTIFICATIONS to highlight JD relevance. Do not invent credentials.
+[CERTIFICATIONS_LIST]
+---
+[JOB_DESCRIPTION]
+Return a JSON array of strings.

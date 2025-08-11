@@ -1,0 +1,5 @@
+Normalize LANGUAGE levels; keep only useful ones for JD.
+[LANGUAGES_LIST]
+---
+[JOB_DESCRIPTION]
+Return a JSON array of strings.
