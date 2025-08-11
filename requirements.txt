@@ -1,0 +1,7 @@
+openai>=1.30
+python-dotenv>=1.0.0
+pdfplumber>=0.11
+python-docx>=0.8.11
+docxtpl>=0.16.7
+click>=8.1
+pydantic>=2.7

@@ -1,0 +1,20 @@
+Senior Software Engineer - Backend Development
+
+We are seeking a Senior Software Engineer to join our growing team. The ideal candidate will have strong experience in Python development and cloud infrastructure.
+
+Key Responsibilities:
+- Design and implement scalable backend services using Python
+- Work with cloud platforms (AWS/Azure/GCP) and containerization technologies
+- Collaborate with cross-functional teams to deliver high-quality software
+- Mentor junior developers and contribute to technical architecture decisions
+
+Required Skills:
+- 5+ years of Python development experience
+- Experience with REST APIs, microservices, and database design
+- Knowledge of cloud platforms and DevOps practices
+- Strong problem-solving skills and attention to detail
+
+Nice to Have:
+- Experience with machine learning or AI applications
+- Knowledge of document processing and PDF/DOCX handling
+- Familiarity with modern web frameworks (FastAPI, Django, Flask)
