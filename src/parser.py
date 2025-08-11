@@ -160,7 +160,7 @@ def _extract_location_from_text(text: str) -> str | None:
     return loc_pattern.group(0) if loc_pattern else None
 
 def _parse_experience(block: str) -> List[ExperienceItem]:
-    """Improved experience parsing with better company/title/date separation"""
+    """Generalized experience parsing for both simple and complex formats"""
     items: List[ExperienceItem] = []
     chunks = _split_blocks_by_blanklines(block)
     
@@ -169,7 +169,41 @@ def _parse_experience(block: str) -> List[ExperienceItem]:
         if not lines:
             continue
         
-        # First line: company and location (separated by tabs/spaces)
+        # First line: could be simple format (title — company, location dates) 
+        # or complex format (company location)
+        first_line = lines[0]
+        
+        # Check if this is simple format (contains "—")
+        if "—" in first_line:
+            # Simple format: "Title — Company, Location   Dates"
+            parts = re.split(r'\s+—\s+', first_line.strip())
+            if len(parts) >= 2:
+                title = parts[0].strip()
+                company_location_dates = parts[1].strip()
+                
+                # Extract location and dates from the second part
+                location = _extract_location_from_text(company_location_dates)
+                company = company_location_dates
+                if location:
+                    company = company_location_dates.replace(location, "").strip(" ,")
+                
+                # Extract dates
+                start_date, end_date = _extract_dates_from_text(company_location_dates)
+                
+                # Bullets start from second line
+                desc = "\n".join(lines[1:]) if len(lines) > 1 else ""
+                
+                items.append(ExperienceItem(
+                    title=title or None,
+                    company=company or None,
+                    location=location,
+                    start_date=start_date,
+                    end_date=end_date,
+                    bullets=_bullets(desc),
+                ))
+                continue
+        
+        # Complex format: company and location on first line, title and dates on second
         company_line = lines[0]
         
         # Split by multiple spaces or tabs to separate company from location
@@ -184,7 +218,7 @@ def _parse_experience(block: str) -> List[ExperienceItem]:
             if location:
                 company = company_line.replace(location, "").strip(" -–—\u2022").strip()
         
-        # Second line: title and dates (separated by tabs/spaces)
+        # Second line: title and dates (separated by tabs)
         title = None
         start_date = None
         end_date = None
@@ -222,7 +256,7 @@ def _parse_experience(block: str) -> List[ExperienceItem]:
     return items
 
 def _parse_education(block: str) -> List[EducationItem]:
-    """Improved education parsing with better school/location separation"""
+    """Generalized education parsing for both simple and complex formats"""
     items: List[EducationItem] = []
     chunks = _split_blocks_by_blanklines(block)
     
@@ -231,22 +265,20 @@ def _parse_education(block: str) -> List[EducationItem]:
         if not lines:
             continue
         
-        # First line: school and location (separated by tabs/spaces)
+        # First line: school name (and possibly location)
         school_line = lines[0]
         
-        # Split by multiple spaces or tabs to separate school from location
-        parts = re.split(r'\s{2,}|\t', school_line.strip())
-        if len(parts) >= 2:
-            school = parts[0].strip()
-            location = parts[1].strip()
+        # Check if this line contains location pattern
+        location = _extract_location_from_text(school_line)
+        school = school_line
+        if location:
+            # Complex format: school and location on same line
+            school = school_line.replace(location, "").strip(" -–—\u2022").strip()
         else:
-            # Fallback: try to extract location pattern
-            location = _extract_location_from_text(school_line)
-            school = school_line
-            if location:
-                school = school_line.replace(location, "").strip(" -–—\u2022").strip()
+            # Simple format: just school name
+            school = school_line.strip()
         
-        # Second line: degree, GPA, dates
+        # Second line: degree information
         degree = None
         gpa = None
         dates = None
@@ -269,6 +301,16 @@ def _parse_education(block: str) -> List[EducationItem]:
         # Remaining lines are bullets
         bullets = _bullets("\n".join(lines[2:])) if len(lines) > 2 else []
         
+        # For simple format, dates might be in bullets
+        if not dates and bullets:
+            for bullet in bullets:
+                start_date, end_date = _extract_dates_from_text(bullet)
+                if start_date:
+                    dates = f"{start_date} - {end_date}" if end_date else start_date
+                    # Remove the date bullet
+                    bullets = [b for b in bullets if b != bullet]
+                    break
+        
         items.append(EducationItem(
             school=school or None,
             location=location,
@@ -282,7 +324,7 @@ def _parse_education(block: str) -> List[EducationItem]:
     return items
 
 def _parse_projects(block: str) -> List[ProjectItem]:
-    """Improved project parsing with better name/location separation"""
+    """Generalized project parsing for both simple and complex formats"""
     items: List[ProjectItem] = []
     chunks = _split_blocks_by_blanklines(block)
     
@@ -291,19 +333,140 @@ def _parse_projects(block: str) -> List[ProjectItem]:
         if not lines:
             continue
         
-        # First line: project name and location
+        # First line: project name and possibly location
         name_line = lines[0]
-        location = _extract_location_from_text(name_line)
-        name = name_line
-        if location:
-            name = name_line.replace(location, "").strip(" -–—\u2022").strip()
         
-        # Extract dates from the chunk
-        start_date, end_date = _extract_dates_from_text(c)
-        dates = f"{start_date} - {end_date}" if start_date and end_date else start_date
+        # Check if this is simple format (contains "—")
+        if "—" in name_line:
+            # Simple format: "Project Name — Year"
+            parts = re.split(r'\s+—\s+', name_line.strip())
+            if len(parts) >= 2:
+                name = parts[0].strip()
+                date_text = parts[1].strip()
+                
+                # Extract dates
+                start_date, end_date = _extract_dates_from_text(date_text)
+                dates = f"{start_date} - {end_date}" if start_date and end_date else start_date
+                
+                # All remaining lines are bullets
+                bullets = _bullets("\n".join(lines[1:])) if len(lines) > 1 else []
+                
+                items.append(ProjectItem(
+                    name=name or None,
+                    location=None,
+                    dates=dates,
+                    bullets=bullets,
+                    skills=[]
+                ))
+                continue
+        
+        # Complex format: name and location on first line, tech stack and dates on second
+        # Split by multiple spaces or tabs to separate name from location
+        parts = re.split(r'\s{2,}|\t', name_line.strip())
+        if len(parts) >= 2:
+            name = parts[0].strip()
+            location = parts[1].strip()
+        else:
+            # Fallback: try to extract location pattern
+            location = _extract_location_from_text(name_line)
+            name = name_line
+            if location:
+                name = name_line.replace(location, "").strip(" -–—\u2022").strip()
+        
+        # Second line: tech stack and dates (separated by tabs)
+        skills = []
+        dates = None
+        
+        if len(lines) >= 2:
+            tech_line = lines[1]
+            
+            # Split by multiple spaces or tabs to separate tech stack from dates
+            tech_parts = re.split(r'\s{2,}|\t', tech_line.strip())
+            if len(tech_parts) >= 2:
+                tech_stack = tech_parts[0].strip()
+                date_text = tech_parts[1].strip()
+                
+                # Extract skills from tech stack (pipe-separated)
+                if tech_stack:
+                    skills = [s.strip() for s in tech_stack.split('|') if s.strip()]
+                
+                # Extract dates
+                start_date, end_date = _extract_dates_from_text(date_text)
+                if start_date:
+                    dates = f"{start_date} - {end_date}" if end_date else start_date
+            else:
+                # Fallback: extract dates from the whole line
+                start_date, end_date = _extract_dates_from_text(tech_line)
+                if start_date:
+                    dates = f"{start_date} - {end_date}" if end_date else start_date
+                
+                # Try to extract tech stack from the line
+                tech_stack = re.sub(r"(?i)((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\s*[-–—]\s*(Present|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})", "", tech_line).strip()
+                if tech_stack:
+                    skills = [s.strip() for s in tech_stack.split('|') if s.strip()]
         
         # Remaining lines are bullets
-        bullets = _bullets("\n".join(lines[1:])) if len(lines) > 1 else []
+        bullets = _bullets("\n".join(lines[2:])) if len(lines) > 2 else []
+        
+        items.append(ProjectItem(
+            name=name or None,
+            location=location,
+            dates=dates,
+            bullets=bullets,
+            skills=skills
+        ))
+    
+    return items
+
+def _parse_volunteer(block: str) -> List[ProjectItem]:
+    """Parse volunteer sections with organization name and dates on second line"""
+    items: List[ProjectItem] = []
+    chunks = _split_blocks_by_blanklines(block)
+    
+    for c in chunks:
+        lines = [l for l in c.splitlines() if l.strip()]
+        if not lines:
+            continue
+        
+        # First line: volunteer role and location (separated by tabs)
+        name_line = lines[0]
+        
+        # Split by multiple spaces or tabs to separate name from location
+        parts = re.split(r'\s{2,}|\t', name_line.strip())
+        if len(parts) >= 2:
+            name = parts[0].strip()
+            location = parts[1].strip()
+        else:
+            # Fallback: try to extract location pattern
+            location = _extract_location_from_text(name_line)
+            name = name_line
+            if location:
+                name = name_line.replace(location, "").strip(" -–—\u2022").strip()
+        
+        # Second line: organization name and dates (separated by tabs)
+        dates = None
+        
+        if len(lines) >= 2:
+            org_line = lines[1]
+            
+            # Split by multiple spaces or tabs to separate org from dates
+            org_parts = re.split(r'\s{2,}|\t', org_line.strip())
+            if len(org_parts) >= 2:
+                org_name = org_parts[0].strip()
+                date_text = org_parts[1].strip()
+                
+                # Extract dates
+                start_date, end_date = _extract_dates_from_text(date_text)
+                if start_date:
+                    dates = f"{start_date} - {end_date}" if end_date else start_date
+            else:
+                # Fallback: extract dates from the whole line
+                start_date, end_date = _extract_dates_from_text(org_line)
+                if start_date:
+                    dates = f"{start_date} - {end_date}" if end_date else start_date
+        
+        # Remaining lines are bullets
+        bullets = _bullets("\n".join(lines[2:])) if len(lines) > 2 else []
         
         items.append(ProjectItem(
             name=name or None,
@@ -396,14 +559,29 @@ def parse_resume(path: str) -> dict:
         r.education = _parse_education(sections["EDUCATION"])
     
     # Projects
+    project_skills = []
     if "PROJECTS" in sections:
-        r.projects = _parse_projects(sections["PROJECTS"])
+        projects = _parse_projects(sections["PROJECTS"])
+        r.projects = projects
+        # Collect skills from projects
+        for project in projects:
+            project_skills.extend(project.skills)
     
     # Technical Skills / Skills
+    main_skills = []
     for key in ["TECHNICAL SKILLS", "SKILLS"]:
         if key in sections:
-            r.skills = _parse_skills(sections[key])
+            main_skills = _parse_skills(sections[key])
             break
+    
+    # Merge main skills with project skills and deduplicate
+    all_skills = main_skills + project_skills
+    seen = set()
+    r.skills = []
+    for skill in all_skills:
+        if skill.lower() not in seen:
+            seen.add(skill.lower())
+            r.skills.append(skill)
     
     # Certifications
     for key in ["CERTIFICATIONS & LICENSES", "CERTIFICATIONS", "LICENSES"]:
@@ -420,7 +598,7 @@ def parse_resume(path: str) -> dict:
     # Volunteer
     for key in ["VOLUNTEER EXPERIENCE", "VOLUNTEER"]:
         if key in sections:
-            r.volunteer = _parse_projects(sections[key])
+            r.volunteer = _parse_volunteer(sections[key])
             break
     
     return r.model_dump()
