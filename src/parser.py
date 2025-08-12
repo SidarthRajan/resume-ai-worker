@@ -21,6 +21,9 @@ HEADER_PATTERN = re.compile(
     r"^(?P<hdr>[A-Za-z][A-Za-z\s&]+?)(:?\s*)$"
 )
 
+CITIZENSHIP_RE = re.compile(r"\b(U\.S\.|US|United States)\s*Citizen\b", re.I)
+CLEARANCE_RE  = re.compile(r"\b(SECRET|TOP\s*SECRET|PUBLIC\s*TRUST|TS\/SCI)\b", re.I)
+
 def _read_text(path: str) -> str:
     ext = os.path.splitext(path)[1].lower()
     if ext == ".docx":
@@ -87,6 +90,14 @@ def _split_sections(text: str) -> Dict[str, str]:
             sections[names[j]] = body
     
     return sections
+
+def _contact_extras(text: str):
+    top = text.splitlines()[:10]
+    blob = " ".join(top)
+    citizenship = "U.S. Citizen" if CITIZENSHIP_RE.search(blob) else None
+    clr = CLEARANCE_RE.search(blob)
+    clearance = f"ACTIVE {clr.group(1).upper()} CLEARANCE" if clr else None
+    return citizenship, clearance
 
 def _parse_contact_block(full_text: str) -> Contact:
     # Contact is everything before the first detected header
@@ -158,6 +169,18 @@ def _extract_location_from_text(text: str) -> str | None:
     """Extract location pattern from text"""
     loc_pattern = re.search(r"[A-Za-z][A-Za-z\.\s]+,\s*[A-Za-z]{2}\b", text)
     return loc_pattern.group(0) if loc_pattern else None
+
+def _edu_lists(block: str):
+    concentrations, coursework, honors = [], [], []
+    for line in block.splitlines():
+        L = line.strip()
+        if L.lower().startswith("concentrations:"):
+            concentrations = [s.strip() for s in L.split(":",1)[1].split(",") if s.strip()]
+        elif L.lower().startswith("coursework:"):
+            coursework = [s.strip() for s in L.split(":",1)[1].split(",") if s.strip()]
+        elif L.lower().startswith("honors:"):
+            honors = [s.strip() for s in L.split(":",1)[1].split(",") if s.strip()]
+    return concentrations, coursework, honors
 
 def _parse_experience(block: str) -> List[ExperienceItem]:
     """Generalized experience parsing for both simple and complex formats"""
@@ -418,6 +441,98 @@ def _parse_projects(block: str) -> List[ProjectItem]:
     
     return items
 
+def _parse_skills_matrix(block: str):
+    matrix = {}
+    for line in block.splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            items = [s.strip() for s in re.split(r"[,\|]", v) if s.strip()]
+            if items:
+                matrix[k.strip()] = items
+    # flattened
+    flat = []
+    seen = set()
+    for arr in matrix.values():
+        for s in arr:
+            key = s.lower()
+            if key not in seen:
+                seen.add(key); flat.append(s)
+    return matrix, flat
+
+def _parse_skills(block: str) -> List[str]:
+    """Handles category lines and flattens into one list"""
+    skills: List[str] = []
+    for line in block.splitlines():
+        if not line.strip():
+            continue
+        # take RHS after colon if present
+        rhs = line.split(":", 1)[1] if ":" in line else line
+        parts = [p.strip() for p in re.split(r"[,\|]", rhs) if p.strip()]
+        skills.extend(parts)
+    
+    # dedupe preserve order
+    seen = set()
+    out = []
+    for s in skills:
+        k = s.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(s)
+    return out
+
+def _parse_certs_structured(block: str):
+    from .schema import CertificationItem
+    out = []
+    lines = [l for l in block.splitlines() if l.strip()]
+    i = 0
+    while i < len(lines):
+        name = lines[i].strip()
+        org = None; year = None
+        # year in name?
+        ym = re.search(r"\b(20\d{2}|19\d{2})\b", name)
+        if ym: year = ym.group(1)
+        # next line could be org
+        if i+1 < len(lines) and not HEADER_PATTERN.match(lines[i+1]):
+            org = lines[i+1].strip()
+            i += 1
+        out.append(CertificationItem(name=name, organization=org, year=year))
+        i += 1
+    return out
+
+def _parse_certs(block: str) -> List[str]:
+    """Parse certifications with organization names"""
+    out: List[str] = []
+    lines = [l for l in block.splitlines() if l.strip()]
+    i = 0
+    while i < len(lines):
+        name = lines[i].strip()
+        org = None
+        # Peek next if not header-y
+        if i + 1 < len(lines) and not HEADER_PATTERN.match(lines[i+1].strip()):
+            # If next line looks like an org (single phrase, no comma-state)
+            org = lines[i+1].strip()
+            i += 1
+        combo = name if not org else f"{name} — {org}"
+        out.append(combo)
+        i += 1
+    return out
+
+def _parse_languages(block: str) -> List[str]:
+    out: List[str] = []
+    for line in block.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Normalize '(Conversational)' etc.
+        m = re.match(r"([A-Za-z\s]+)\s*\(([^)]+)\)", line)
+        if m:
+            lang = m.group(1).strip()
+            level = m.group(2).strip().title()
+            out.append(f"{lang} — {level}")
+        else:
+            out.append(line)
+    return out
+
 def _parse_volunteer(block: str) -> List[ProjectItem]:
     """Parse volunteer sections with organization name and dates on second line"""
     items: List[ProjectItem] = []
@@ -478,61 +593,6 @@ def _parse_volunteer(block: str) -> List[ProjectItem]:
     
     return items
 
-def _parse_skills(block: str) -> List[str]:
-    """Handles category lines and flattens into one list"""
-    skills: List[str] = []
-    for line in block.splitlines():
-        if not line.strip():
-            continue
-        # take RHS after colon if present
-        rhs = line.split(":", 1)[1] if ":" in line else line
-        parts = [p.strip() for p in re.split(r"[,\|]", rhs) if p.strip()]
-        skills.extend(parts)
-    
-    # dedupe preserve order
-    seen = set()
-    out = []
-    for s in skills:
-        k = s.lower()
-        if k not in seen:
-            seen.add(k)
-            out.append(s)
-    return out
-
-def _parse_certs(block: str) -> List[str]:
-    """Parse certifications with organization names"""
-    out: List[str] = []
-    lines = [l for l in block.splitlines() if l.strip()]
-    i = 0
-    while i < len(lines):
-        name = lines[i].strip()
-        org = None
-        # Peek next if not header-y
-        if i + 1 < len(lines) and not HEADER_PATTERN.match(lines[i+1].strip()):
-            # If next line looks like an org (single phrase, no comma-state)
-            org = lines[i+1].strip()
-            i += 1
-        combo = name if not org else f"{name} — {org}"
-        out.append(combo)
-        i += 1
-    return out
-
-def _parse_languages(block: str) -> List[str]:
-    out: List[str] = []
-    for line in block.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        # Normalize '(Conversational)' etc.
-        m = re.match(r"([A-Za-z\s]+)\s*\(([^)]+)\)", line)
-        if m:
-            lang = m.group(1).strip()
-            level = m.group(2).strip().title()
-            out.append(f"{lang} — {level}")
-        else:
-            out.append(line)
-    return out
-
 def parse_resume(path: str) -> dict:
     raw = _read_text(path)
     text = _normalize_text_preserve_tabs(raw)
@@ -541,6 +601,9 @@ def parse_resume(path: str) -> dict:
     
     # Contact
     r.contact = _parse_contact_block(text)
+    cit, clr = _contact_extras(text)
+    r.contact.citizenship = cit
+    r.contact.clearance = clr
     
     # Summary / Objective
     if "SUMMARY" in sections:
@@ -557,6 +620,12 @@ def parse_resume(path: str) -> dict:
     # Education
     if "EDUCATION" in sections:
         r.education = _parse_education(sections["EDUCATION"])
+        cons, course, hon = _edu_lists(sections["EDUCATION"])
+        # apply the same lists to each item (or distribute if you prefer)
+        for ed in r.education:
+            if not ed.concentrations: ed.concentrations = cons
+            if not ed.coursework: ed.coursework = course
+            if not ed.honors: ed.honors = hon
     
     # Projects
     project_skills = []
@@ -571,22 +640,15 @@ def parse_resume(path: str) -> dict:
     main_skills = []
     for key in ["TECHNICAL SKILLS", "SKILLS"]:
         if key in sections:
-            main_skills = _parse_skills(sections[key])
+            matrix, flat = _parse_skills_matrix(sections[key])
+            r.skills_matrix = matrix
+            r.skills = flat
             break
     
-    # Merge main skills with project skills and deduplicate
-    all_skills = main_skills + project_skills
-    seen = set()
-    r.skills = []
-    for skill in all_skills:
-        if skill.lower() not in seen:
-            seen.add(skill.lower())
-            r.skills.append(skill)
-    
-    # Certifications
+    # Certifications -> structured
     for key in ["CERTIFICATIONS & LICENSES", "CERTIFICATIONS", "LICENSES"]:
         if key in sections:
-            r.certifications = _parse_certs(sections[key])
+            r.certifications = _parse_certs_structured(sections[key])
             break
     
     # Languages

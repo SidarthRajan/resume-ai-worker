@@ -1,6 +1,6 @@
 # src/schema.py
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Literal
+from typing import List, Optional, Dict, Literal, Any
 
 Priority = Literal["high", "med", "low"]
 
@@ -85,7 +85,7 @@ class Resume(BaseModel):
     awards: List[str] = Field(default_factory=list)
 
     # meta & layout
-    meta: Dict[str, any] = Field(default_factory=dict)
+    meta: Dict[str, Any] = Field(default_factory=dict)
     # meta may include:
     #   one_page: bool
     #   section_order: List[str]
