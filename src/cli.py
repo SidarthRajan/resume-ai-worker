@@ -2,6 +2,7 @@
 import click, json, os
 from .parser import parse_resume
 from .tailor import rewrite_sections_single_call
+from .exporter import export_docx
 
 @click.group()
 def cli(): pass
@@ -25,6 +26,14 @@ def tailor(parsed, jd, out):
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+    click.echo(f"Wrote {out}")
+
+@cli.command()
+@click.option('--tailored', required=True)
+@click.option('--template', required=True)
+@click.option('--out', required=True)
+def export(tailored, template, out):
+    export_docx(tailored, template, out)
     click.echo(f"Wrote {out}")
 
 if __name__ == "__main__":
